@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Video Party Extension",
+  "version": "1.0",
+  "description": "Watch and stream videos together live through video calls",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "http://localhost:3000/*",
+    "ws://localhost:3000/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
