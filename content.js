@@ -62,34 +62,10 @@ function toggleAudio() {
 }
 
 async function initializeWebRTC(roomId) {
-  ws = new WebSocket(`ws://localhost:3000?roomId=${roomId}`);
+  console.log('Initializing WebRTC for room:', roomId);
   currentRoom = roomId;
-
-  ws.onopen = () => {
-    console.log('WebSocket connection established');
-    ws.send(JSON.stringify({ action: 'join', roomId: roomId }));
-  };
-
-  ws.onmessage = async (event) => {
-    const data = JSON.parse(event.data);
-    switch (data.action) {
-      case 'offer':
-        await handleOffer(data.offer, data.from);
-        break;
-      case 'answer':
-        await handleAnswer(data.answer, data.from);
-        break;
-      case 'ice-candidate':
-        await handleIceCandidate(data.candidate, data.from);
-        break;
-      case 'user-joined':
-        await createPeerConnection(data.userId);
-        break;
-      case 'user-left':
-        removePeerConnection(data.userId);
-        break;
-    }
-  };
+  // For now, we'll simulate the 'user-joined' event
+  setTimeout(() => createPeerConnection('simulated-user-id'), 1000);
 }
 
 async function createPeerConnection(userId) {
@@ -102,12 +78,14 @@ async function createPeerConnection(userId) {
 
   peerConnection.onicecandidate = (event) => {
     if (event.candidate) {
-      sendToServer({
-        action: 'ice-candidate',
-        candidate: event.candidate,
-        to: userId,
-        from: currentRoom
-      });
+      console.log('New ICE candidate:', event.candidate);
+      // Instead of sending to server, we'll just log it for now
+      // sendToServer({
+      //   action: 'ice-candidate',
+      //   candidate: event.candidate,
+      //   to: userId,
+      //   from: currentRoom
+      // });
     }
   };
 
@@ -122,12 +100,14 @@ async function createPeerConnection(userId) {
   try {
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
-    sendToServer({
-      action: 'offer',
-      offer: offer,
-      to: userId,
-      from: currentRoom
-    });
+    console.log('Created offer:', offer);
+    // Instead of sending to server, we'll just log it for now
+    // sendToServer({
+    //   action: 'offer',
+    //   offer: offer,
+    //   to: userId,
+    //   from: currentRoom
+    // });
   } catch (error) {
     console.error('Error creating offer:', error);
   }
@@ -191,8 +171,13 @@ function removePeerConnection(userId) {
 }
 
 function sendToServer(message) {
-  // Send message to WebSocket server
-  ws.send(JSON.stringify(message));
+  // For now, we'll just log the message instead of sending it
+  console.log('Message to server:', message);
+  // if (ws && ws.readyState === WebSocket.OPEN) {
+  //   ws.send(JSON.stringify(message));
+  // } else {
+  //   console.error('WebSocket is not open. Unable to send message:', message);
+  // }
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
