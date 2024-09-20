@@ -64,32 +64,78 @@ function toggleAudio() {
 async function initializeWebRTC(roomId) {
   console.log('Initializing WebRTC for room:', roomId);
   currentRoom = roomId;
-  // For now, we'll simulate the 'user-joined' event
-  setTimeout(() => createPeerConnection('simulated-user-id'), 1000);
+
+  try {
+    ws = new WebSocket(`ws://localhost:3000?roomId=${roomId}`);
+
+    ws.onopen = () => {
+      console.log('WebSocket connection established');
+      ws.send(JSON.stringify({ action: 'join', roomId: roomId }));
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    ws.onclose = (event) => {
+      console.log('WebSocket connection closed:', event.code, event.reason);
+    };
+
+    ws.onmessage = async (event) => {
+      const data = JSON.parse(event.data);
+      console.log('Received message:', data);
+      switch (data.action) {
+        case 'user-joined':
+          console.log('New user joined:', data.userId);
+          await createPeerConnection(data.userId);
+          break;
+        case 'offer':
+          console.log('Received offer from:', data.from);
+          await handleOffer(data.offer, data.from);
+          break;
+        case 'answer':
+          console.log('Received answer from:', data.from);
+          await handleAnswer(data.answer, data.from);
+          break;
+        case 'ice-candidate':
+          console.log('Received ICE candidate from:', data.from);
+          await handleIceCandidate(data.candidate, data.from);
+          break;
+        case 'user-left':
+          console.log('User left:', data.userId);
+          removePeerConnection(data.userId);
+          break;
+      }
+    };
+  } catch (error) {
+    console.error('Error initializing WebRTC:', error);
+  }
 }
 
 async function createPeerConnection(userId) {
+  console.log('Creating peer connection for user:', userId);
   const peerConnection = new RTCPeerConnection();
   peerConnections[userId] = peerConnection;
 
   if (localStream) {
+    console.log('Adding local stream to peer connection');
     localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
   }
 
   peerConnection.onicecandidate = (event) => {
     if (event.candidate) {
-      console.log('New ICE candidate:', event.candidate);
-      // Instead of sending to server, we'll just log it for now
-      // sendToServer({
-      //   action: 'ice-candidate',
-      //   candidate: event.candidate,
-      //   to: userId,
-      //   from: currentRoom
-      // });
+      console.log('Sending ICE candidate to:', userId);
+      sendToServer({
+        action: 'ice-candidate',
+        candidate: event.candidate,
+        to: userId,
+        from: currentRoom
+      });
     }
   };
 
   peerConnection.ontrack = (event) => {
+    console.log('Received remote stream from:', userId);
     const remoteVideo = document.createElement('video');
     remoteVideo.srcObject = event.streams[0];
     remoteVideo.autoplay = true;
@@ -98,16 +144,15 @@ async function createPeerConnection(userId) {
   };
 
   try {
+    console.log('Creating offer for:', userId);
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
-    console.log('Created offer:', offer);
-    // Instead of sending to server, we'll just log it for now
-    // sendToServer({
-    //   action: 'offer',
-    //   offer: offer,
-    //   to: userId,
-    //   from: currentRoom
-    // });
+    sendToServer({
+      action: 'offer',
+      offer: offer,
+      to: userId,
+      from: currentRoom
+    });
   } catch (error) {
     console.error('Error creating offer:', error);
   }
@@ -171,23 +216,25 @@ function removePeerConnection(userId) {
 }
 
 function sendToServer(message) {
-  // For now, we'll just log the message instead of sending it
-  console.log('Message to server:', message);
-  // if (ws && ws.readyState === WebSocket.OPEN) {
-  //   ws.send(JSON.stringify(message));
-  // } else {
-  //   console.error('WebSocket is not open. Unable to send message:', message);
-  // }
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(message));
+  } else {
+    console.error('WebSocket is not open. Unable to send message:', message);
+  }
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  console.log('Received message:', request);
   if (request.action === 'hostParty') {
+    console.log('Hosting party with room ID:', request.roomId);
     createVideoCallUI(request.roomId);
     initializeWebRTC(request.roomId);
   } else if (request.action === 'joinRoom') {
+    console.log('Joining room with ID:', request.roomId);
     createVideoCallUI(request.roomId);
     initializeWebRTC(request.roomId);
   } else if (request.action === 'hostLeft') {
+    console.log('Host left the room');
     alert('The host has left the room. The party has ended.');
     if (videoCallUI) {
       videoCallUI.remove();
